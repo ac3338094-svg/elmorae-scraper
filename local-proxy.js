@@ -47,7 +47,10 @@ function smartFetch(targetUrl, maxRedirects = 5) {
   return new Promise((resolve, reject) => {
     if (maxRedirects <= 0) return reject(new Error('Too many redirects'));
     
-    const fetchUrl = `http://api.scraperapi.com?api_key=2917b215b8a13776ec2dafa44cd165a2&url=${encodeURIComponent(targetUrl)}`;
+    let fetchUrl = targetUrl;
+    if (fetchUrl.includes('myntra')) {
+      fetchUrl = `http://api.scraperapi.com?api_key=2917b215b8a13776ec2dafa44cd165a2&url=${encodeURIComponent(targetUrl)}`;
+    }
     
     const parsed = new URL(fetchUrl);
     const client = parsed.protocol === 'https:' ? https : http;
