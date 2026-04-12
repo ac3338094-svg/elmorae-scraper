@@ -47,7 +47,8 @@ function smartFetch(targetUrl, maxRedirects = 5) {
   return new Promise((resolve, reject) => {
     if (maxRedirects <= 0) return reject(new Error('Too many redirects'));
     let fetchUrl = targetUrl;
-    if (fetchUrl.includes('myntra')) {
+    const lowUrl = fetchUrl.toLowerCase();
+    if (lowUrl.includes('myntra') || lowUrl.includes('amazon') || lowUrl.includes('amzn')) {
       const apiKey = process.env.SCRAPERAPI_KEY || '2917b215b8a13776ec2dafa44cd165a2';
       fetchUrl = `http://api.scraperapi.com?api_key=${apiKey}&url=${encodeURIComponent(targetUrl)}`;
     }
