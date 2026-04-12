@@ -10,13 +10,13 @@ const PORT = process.env.PORT || 5501;
 let globalBrowser = null;
 async function getBrowser() {
   if (!globalBrowser) {
-    globalBrowser = await chromium.launch({ 
-      headless: true, 
+    globalBrowser = await chromium.launch({
+      headless: true,
       args: [
         '--no-sandbox', '--disable-setuid-sandbox', '--disable-http2',
         '--disable-blink-features=AutomationControlled',
         '--disable-features=IsolateOrigins,site-per-process'
-      ] 
+      ]
     });
   }
   return globalBrowser;
@@ -46,16 +46,26 @@ const MIME_TYPES = {
 function smartFetch(targetUrl, maxRedirects = 5) {
   return new Promise((resolve, reject) => {
     if (maxRedirects <= 0) return reject(new Error('Too many redirects'));
+
+    let fetchUrl = targetUrl;
+    if (fetchUrl.includes('myntra')) {
+      fetchUrl = `http://api.scraperapi.com?api_key=2917b215b8a13776ec2dafa44cd165a2&url=${encodeURIComponent(targetUrl)}`;
+    }
     
-    const parsed = new URL(targetUrl);
+    const parsed = new URL(fetchUrl);
     const client = parsed.protocol === 'https:' ? https : http;
-    
+
+    const isMyntra = targetUrl.toLowerCase().includes('myntra');
+    const ua = isMyntra 
+      ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1'
+      : 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
+
     const options = {
       hostname: parsed.hostname,
       path: parsed.pathname + parsed.search,
       method: 'GET',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+        'User-Agent': ua,
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
         'Accept-Encoding': 'identity',
@@ -67,16 +77,16 @@ function smartFetch(targetUrl, maxRedirects = 5) {
         'Upgrade-Insecure-Requests': '1',
       }
     };
-    
+
     const req = client.get(options, (res) => {
       // Follow redirects (301, 302, 303, 307, 308)
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        const redirectUrl = res.headers.location.startsWith('http') 
-          ? res.headers.location 
+        const redirectUrl = res.headers.location.startsWith('http')
+          ? res.headers.location
           : `${parsed.protocol}//${parsed.hostname}${res.headers.location}`;
         return smartFetch(redirectUrl, maxRedirects - 1).then(resolve).catch(reject);
       }
-      
+
       let data = '';
       res.on('data', (d) => data += d);
       res.on('end', () => resolve({ data, status: res.statusCode, finalUrl: targetUrl }));
@@ -98,7 +108,7 @@ function extractAmazonPrice(html) {
     /"price_value"\s*:\s*"?(\d[\d,.]*)"?/,
     /"value"\s*:\s*"?([\d,]+\.?\d*)"?\s*,\s*"currencyCode"\s*:\s*"INR"/,
   ];
-  
+
   for (const pat of jsonPatterns) {
     const m = html.match(pat);
     if (m) {
@@ -115,7 +125,7 @@ function extractAmazonPrice(html) {
     /apexPriceToPay[^>]*>.*?<span[^>]*>([\d,]+)/s,
     /"lowPrice"\s*:\s*"?([\d,.]+)"?/,
   ];
-  
+
   for (const pat of structuredPatterns) {
     const m = html.match(pat);
     if (m) {
@@ -132,7 +142,7 @@ function extractAmazonPrice(html) {
       .filter(n => n > 50 && n < 500000);
     if (prices.length > 0) return Math.min(...prices); // Usually the sale price is smallest
   }
-  
+
   return null;
 }
 
@@ -145,7 +155,7 @@ function extractFlipkartPrice(html) {
     /"sellingPrice"\s*:\s*(\d+)/,
     /"price"\s*:\s*(\d+)/,
   ];
-  
+
   for (const pat of jsonPatterns) {
     const m = html.match(pat);
     if (m) {
@@ -161,7 +171,7 @@ function extractFlipkartPrice(html) {
     /class="[^"]*Nx9bqj[^"]*"[^>]*>₹([\d,]+)/,  // Modern Flipkart class
     /class="[^"]*VU-Z7M[^"]*"[^>]*>₹([\d,]+)/,  // Added modern class
   ];
-  
+
   for (const pat of classPatterns) {
     const m = html.match(pat);
     if (m) {
@@ -178,14 +188,14 @@ function extractFlipkartPrice(html) {
       .filter(n => n > 50 && n < 500000);
     if (prices.length > 0) return Math.min(...prices);
   }
-  
+
   return null;
 }
 
 function extractMyntraPrice(html) {
-  const jsonMatch = html.match(/"discountedPrice"\s*:\s*(\d+)/) 
-                 || html.match(/"price"\s*:\s*(\d+)/)
-                 || html.match(/"mrp"\s*:\s*(\d+)/);
+  const jsonMatch = html.match(/"discountedPrice"\s*:\s*(\d+)/)
+    || html.match(/"price"\s*:\s*(\d+)/)
+    || html.match(/"mrp"\s*:\s*(\d+)/);
   if (jsonMatch) {
     const val = parseInt(jsonMatch[1]);
     if (val > 10 && val !== 599) return val;
@@ -200,7 +210,7 @@ function extractIndonesianPrice(html) {
     /data-testid="pdp-price"[^>]*>Rp\s?([\d.,]+)/i,
     /itemprop="price"[^>]*content="(\d+)"/i
   ];
-  
+
   for (const pat of idPatterns) {
     const m = html.match(pat);
     if (m) {
@@ -212,12 +222,12 @@ function extractIndonesianPrice(html) {
   // 2. Fallback: Clean HTML and find prices in the main body area
   // We skip only a small bit of the head to find prices in the main container
   const bodyStart = html.indexOf('<body');
-  const mainContent = (bodyStart !== -1) ? html.substring(bodyStart + 100) : html; 
-  
+  const mainContent = (bodyStart !== -1) ? html.substring(bodyStart + 100) : html;
+
   const prices = [];
   const regex = /(?:Rp\.?\s?)(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?)/gi;
   let match;
-  
+
   while ((match = regex.exec(mainContent)) !== null) {
     const context = mainContent.substring(Math.max(0, match.index - 40), match.index);
     // Ignore small prices that are clearly promo conditions
@@ -231,7 +241,7 @@ function extractIndonesianPrice(html) {
     // If we find multiple, the first one after the header is usually the main product price
     return prices[0];
   }
-  
+
   return null;
 }
 
@@ -254,7 +264,7 @@ function extractZaloraPrice(html) {
           return price;
         }
       }
-    } catch(e) {
+    } catch (e) {
       console.log(`[Zalora] __NEXT_DATA__ parse error: ${e.message}`);
     }
   }
@@ -290,7 +300,7 @@ function extractZaloraPrice(html) {
           return val;
         }
       }
-    } catch(e) { /* JSON parse failed, continue */ }
+    } catch (e) { /* JSON parse failed, continue */ }
   }
 
   // 4. Zalora-specific HTML patterns: price in bold div with "text-lg font-bold" class
@@ -313,11 +323,11 @@ function extractZaloraPrice(html) {
   // 5. Fallback: Rp regex sweep, but SKIP promo/reward text
   const bodyStart = html.indexOf('<body');
   const mainContent = (bodyStart !== -1) ? html.substring(bodyStart + 100) : html;
-  
+
   const prices = [];
   const regex = /(?:Rp\.?)[\s\u00a0&;nbps]*([\d]{1,3}(?:[.,]\d{3})*)/gi;
   let match;
-  
+
   while ((match = regex.exec(mainContent)) !== null) {
     const context = mainContent.substring(Math.max(0, match.index - 60), match.index + match[0].length + 30);
     // Skip promo/reward/voucher/min purchase text
@@ -332,7 +342,7 @@ function extractZaloraPrice(html) {
     console.log(`[Zalora] Regex sweep prices: ${prices.join(', ')} — returning first`);
     return prices[0];
   }
-  
+
   return null;
 }
 
@@ -373,19 +383,19 @@ function extractImage(html) {
     const m = html.match(pat);
     if (m && m[1].startsWith('http')) return m[1];
   }
-  
+
   // Amazon fallback: extract thumbnail from data-a-dynamic-image and upscale
   const thumbMatch = html.match(/data-a-dynamic-image="[^"]*?(https:\/\/images-eu\.ssl-images-amazon\.com\/images\/I\/[^&"]+)/);
   if (thumbMatch) {
     return thumbMatch[1].replace(/\._[A-Z0-9_,]+_\./, '._SL500_.');
   }
-  
+
   // Last resort: any Amazon product image ID
   const idMatch = html.match(/images-eu\.ssl-images-amazon\.com\/images\/I\/([a-zA-Z0-9]{10,})\./);
   if (idMatch) {
     return `https://m.media-amazon.com/images/I/${idMatch[1]}._SL500_.jpg`;
   }
-  
+
   return null;
 }
 
@@ -396,7 +406,7 @@ function isAllowed(targetUrl) {
   try {
     const host = new URL(targetUrl).hostname;
     return ALLOWED_DOMAINS.some(d => host.includes(d));
-  } catch(e) { return false; }
+  } catch (e) { return false; }
 }
 
 function detectStore(targetUrl) {
@@ -437,29 +447,29 @@ const server = http.createServer(async (req, res) => {
       console.log(`[Tier 1] Attempting raw fetch...`);
       const { data, status, finalUrl } = await smartFetch(targetUrl);
       console.log(`[Tier 1] Got ${status} response, ${data.length} bytes`);
-      
+
       if (status === 200 && data.length > 5000) {
         let price = null;
-        
-        if (store === 'amazon')    price = extractAmazonPrice(data);
-        if (store === 'flipkart')  price = extractFlipkartPrice(data);
-        if (store === 'myntra')    price = extractMyntraPrice(data);
-        if (store === 'tokopedia') price = extractIndonesianPrice(data);
-        if (store === 'zalora')    price = extractZaloraPrice(data);
 
-        
+        if (store === 'amazon') price = extractAmazonPrice(data);
+        if (store === 'flipkart') price = extractFlipkartPrice(data);
+        if (store === 'myntra') price = extractMyntraPrice(data);
+        if (store === 'tokopedia') price = extractIndonesianPrice(data);
+        if (store === 'zalora') price = extractZaloraPrice(data);
+
+
         if (price && price > 0) {
           const name = extractName(data);
           const image = extractImage(data);
           const symbol = isIndia ? '₹' : 'Rp';
           console.log(`[Tier 1] ✅ Found price: ${symbol}${price}`);
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          return res.end(JSON.stringify({ 
-            success: true, 
-            price: `${symbol}${price}`, 
+          return res.end(JSON.stringify({
+            success: true,
+            price: `${symbol}${price}`,
             name: name || 'Product',
             image: image,
-            tier: 1 
+            tier: 1
           }));
         } else {
           console.log(`[Tier 1] ❌ No price found in HTML, falling through to Tier 2...`);
@@ -481,47 +491,47 @@ const server = http.createServer(async (req, res) => {
       const browser = await getBrowser();
       const isMyntra = store === 'myntra';
       context = await browser.newContext({
-        userAgent: isMyntra 
-          ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1' 
+        userAgent: isMyntra
+          ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1'
           : 'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36',
         viewport: { width: 412, height: 915, isMobile: true },
         locale: 'en-IN',
-        extraHTTPHeaders: { 
+        extraHTTPHeaders: {
           'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
           'Sec-CH-UA-Mobile': '?1',
           'Sec-CH-UA-Platform': '"Android"',
         }
       });
       const page = await context.newPage();
-      
+
       // Anti-bot stealth
-      await page.addInitScript(() => { 
+      await page.addInitScript(() => {
         Object.defineProperty(navigator, 'webdriver', { get: () => false });
         Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en', 'hi'] });
         delete navigator.__proto__.webdriver;
         window.chrome = { runtime: {} };
       });
-      
-      try { 
-        await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }); 
-      } catch (e) { 
+
+      try {
+        await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      } catch (e) {
         console.log(`[Tier 2] Navigation partial: ${e.message}`);
       }
-      
+
       await page.waitForTimeout(4000);
       await page.evaluate(() => window.scrollBy(0, 600));
       await page.waitForTimeout(2000);
 
       const scraped = await page.evaluate(({ isIndia, isIndo, store }) => {
-        const query = (selectors) => { 
-          for (const sel of selectors) { 
+        const query = (selectors) => {
+          for (const sel of selectors) {
             const elements = document.querySelectorAll(sel);
             for (const el of elements) {
               const text = (el.innerText || el.textContent || '').trim();
               if (text && !text.includes('%') && text.length < 20) return text;
             }
-          } 
-          return null; 
+          }
+          return null;
         };
 
         let price = null;
@@ -538,9 +548,9 @@ const server = http.createServer(async (req, res) => {
                 const val = parseFloat(String(p).replace(/[^\d.]/g, ''));
                 if (val > 1000) { price = 'Rp ' + val.toLocaleString('id-ID'); break; }
               }
-            } catch(e) {}
+            } catch (e) { }
           }
-          
+
           // Method 2: Zalora's bold price div ("text-lg font-bold" containing Rp)
           if (!price) {
             const allDivs = document.querySelectorAll('div.text-lg.font-bold, div.font-bold');
@@ -555,7 +565,7 @@ const server = http.createServer(async (req, res) => {
               }
             }
           }
-          
+
           // Method 3: Filtered body text sweep for Zalora
           if (!price) {
             const bodyText = document.body.innerText;
@@ -576,7 +586,7 @@ const server = http.createServer(async (req, res) => {
             }
           }
         }
-        
+
         // --- Standard price extraction for other stores ---
         if (!price) {
           const priceSelectors = [
@@ -595,37 +605,37 @@ const server = http.createServer(async (req, res) => {
             '[data-testid="price-discounted"]',
             '.price', '[class*="price"]'
           ];
-          
+
           price = query(priceSelectors);
         }
-        
+
         if (!price || parseFloat(price.replace(/[^\d]/g, '')) < 1) {
           const bodyText = document.body.innerText;
-          const regex = isIndia 
-            ? /(₹|Rs\.?)\s?[1-9]\d{0,2}(,\d{3})*(\.\d{2})?|(₹|Rs\.?)\s?[1-9]\d+/gi 
+          const regex = isIndia
+            ? /(₹|Rs\.?)\s?[1-9]\d{0,2}(,\d{3})*(\.\d{2})?|(₹|Rs\.?)\s?[1-9]\d+/gi
             : /(?:Rp\.?|IDR)\s*[1-9]\d{0,2}(?:[.,]\d{3})*|(?:Rp\.?|IDR)\s*\d+/gi;
           const matches = bodyText.match(regex);
-          if (matches) { 
+          if (matches) {
             const filtered = matches.filter(m => {
               const num = parseFloat(m.replace(/[^\d]/g, ''));
               if (window.location.hostname.includes('amazon') && num < 100) return false;
               return num > 10 && !m.includes('+');
-            }); 
-            price = filtered.length > 0 ? filtered[0] : null; 
+            });
+            price = filtered.length > 0 ? filtered[0] : null;
           }
         }
-        
+
         const getName = () => {
           let n = query(['#productTitle', '#title', '.VU-Z7M', '.B_NuCI', '.Nx9bqj.CxhGGd', 'h1 span', 'h1']);
           if (n) n = n.split('|')[0].replace(/ - Buy.*/, '').replace(/: Amazon\.in.*/, '').trim();
           return n;
         };
-        const getImg = () => { 
-          const el = document.querySelector('#landingImage') || document.querySelector('#imgBlkFront') 
-            || document.querySelector('.image-grid-image') || document.querySelector('._0_1ayN') 
-            || document.querySelector('._396cs4') || document.querySelector('.pdp-main-image') 
-            || document.querySelector('meta[property="og:image"]'); 
-          return el ? (el.src || el.getAttribute('content')) : null; 
+        const getImg = () => {
+          const el = document.querySelector('#landingImage') || document.querySelector('#imgBlkFront')
+            || document.querySelector('.image-grid-image') || document.querySelector('._0_1ayN')
+            || document.querySelector('._396cs4') || document.querySelector('.pdp-main-image')
+            || document.querySelector('meta[property="og:image"]');
+          return el ? (el.src || el.getAttribute('content')) : null;
         };
         return { name: getName(), price, image: getImg() };
       }, { isIndia, isIndo, store });
@@ -637,8 +647,8 @@ const server = http.createServer(async (req, res) => {
       console.error(`[Tier 2] Error: ${err.message}`);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: false, error: err.message }));
-    } finally { 
-      if (context) await context.close(); 
+    } finally {
+      if (context) await context.close();
       releaseSlot();
     }
     return;
@@ -648,7 +658,7 @@ const server = http.createServer(async (req, res) => {
   let filePath = path.join(__dirname, parsedUrl.pathname === '/' ? 'index.html' : parsedUrl.pathname);
   if (!filePath.startsWith(__dirname)) { res.writeHead(403); res.end("Forbidden"); return; }
   fs.readFile(filePath, (err, content) => {
-    if (err) { res.writeHead(err.code === 'ENOENT' ? 404 : 500); res.end(err.code === 'ENOENT' ? "404 Not Found" : "500 Server Error"); } 
+    if (err) { res.writeHead(err.code === 'ENOENT' ? 404 : 500); res.end(err.code === 'ENOENT' ? "404 Not Found" : "500 Server Error"); }
     else { const ext = path.extname(filePath).toLowerCase(); res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'text/plain' }); res.end(content, 'utf-8'); }
   });
 });
