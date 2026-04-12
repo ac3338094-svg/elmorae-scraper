@@ -1,0 +1,12 @@
+{
+  "name": "elmorae-scraper",
+  "version": "1.0.0",
+  "main": "local-proxy.js",
+  "scripts": {
+    "build": "echo 'No build step required'",
+    "start": "node local-proxy.js"
+  },
+  "dependencies": {
+    "playwright-chromium": "^1.59.1"
+  }
+}
