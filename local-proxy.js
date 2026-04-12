@@ -55,7 +55,7 @@ function smartFetch(targetUrl, maxRedirects = 5) {
       path: parsed.pathname + parsed.search,
       method: 'GET',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
         'Accept-Encoding': 'identity',
@@ -445,8 +445,8 @@ const server = http.createServer(async (req, res) => {
         if (store === 'flipkart')  price = extractFlipkartPrice(data);
         if (store === 'myntra')    price = extractMyntraPrice(data);
         if (store === 'tokopedia') price = extractIndonesianPrice(data);
-        // Note: Zalora intentionally skips Tier 1 because runtime client-side discounts
-        // change the final price. We must use Tier 2 Playwright to get the correct price.
+        if (store === 'zalora')    price = extractZaloraPrice(data);
+
         
         if (price && price > 0) {
           const name = extractName(data);
