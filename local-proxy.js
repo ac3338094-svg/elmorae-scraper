@@ -47,15 +47,25 @@ function smartFetch(targetUrl, maxRedirects = 5) {
   return new Promise((resolve, reject) => {
     if (maxRedirects <= 0) return reject(new Error('Too many redirects'));
     
-    const parsed = new URL(targetUrl);
+    let fetchUrl = targetUrl;
+    if (fetchUrl.includes('myntra')) {
+      fetchUrl = `http://api.scraperapi.com?api_key=2917b215b8a13776ec2dafa44cd165a2&url=${encodeURIComponent(targetUrl)}`;
+    }
+    
+    const parsed = new URL(fetchUrl);
     const client = parsed.protocol === 'https:' ? https : http;
     
+    const isMyntra = targetUrl.toLowerCase().includes('myntra');
+    const ua = isMyntra 
+      ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1'
+      : 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
+
     const options = {
       hostname: parsed.hostname,
       path: parsed.pathname + parsed.search,
       method: 'GET',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+        'User-Agent': ua,
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
         'Accept-Encoding': 'identity',
