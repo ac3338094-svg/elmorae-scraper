@@ -49,7 +49,8 @@ function smartFetch(targetUrl, maxRedirects = 5) {
 
     let fetchUrl = targetUrl;
     if (fetchUrl.includes('myntra')) {
-      fetchUrl = `http://api.scraperapi.com?api_key=2917b215b8a13776ec2dafa44cd165a2&url=${encodeURIComponent(targetUrl)}`;
+      const apiKey = process.env.SCRAPERAPI_KEY || '2917b215b8a13776ec2dafa44cd165a2';
+      fetchUrl = `http://api.scraperapi.com?api_key=${apiKey}&url=${encodeURIComponent(targetUrl)}`;
     }
     
     const parsed = new URL(fetchUrl);
